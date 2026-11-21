@@ -1,4 +1,5 @@
 #include "VideoRecorder.hpp"
+#include "AudioBridge.hpp"
 
 #include <android/log.h>
 #include <media/NdkMediaCodec.h>
@@ -109,7 +110,7 @@ bool VideoRecorder::initializeEncoder(std::string const& path) {
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_HEIGHT, m_height);
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21);
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_BIT_RATE,
-        std::min(m_width * m_height * m_fps, 60000000));
+        std::min(m_width * m_height * m_fps / 8, 24000000));
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_FRAME_RATE, m_fps);
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_I_FRAME_INTERVAL, 2);
 
@@ -228,16 +229,20 @@ void VideoRecorder::workerLoop() {
         Frame frame;
         {
             std::unique_lock<std::mutex> lock(m_queueMutex);
-            m_queueCondition.wait(lock, [this] {
+            m_queueCondition.wait_for(lock, std::chrono::milliseconds(8), [this] {
                 return m_stopping || !m_frames.empty();
             });
             if (m_frames.empty() && m_stopping)
                 break;
-            frame = std::move(m_frames.front());
-            m_frames.pop_front();
+            if (!m_frames.empty()) {
+                frame = std::move(m_frames.front());
+                m_frames.pop_front();
+            }
         }
-        encodeFrame(frame);
+        if (!frame.pixels.empty()) encodeFrame(frame);
+        recordaudio_bridge::pump();
     }
+    recordaudio_bridge::pump();
     drain(true);
     m_ready.store(false);
 }
@@ -305,6 +310,7 @@ void VideoRecorder::stop() {
     if (m_worker.joinable())
         m_worker.join();
 
+    recordaudio_bridge::stop();
     closeEncoder();
     m_yuv.clear();
     if (m_error.empty())

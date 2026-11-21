@@ -10,6 +10,13 @@ namespace record {
 static std::vector<uint8_t> s_pixels;
 static std::chrono::steady_clock::time_point s_lastCapture{};
 
+void getFramebufferSize(int& width, int& height) {
+    GLint viewport[4] = {0, 0, 0, 0};
+    glGetIntegerv(GL_VIEWPORT, viewport);
+    width = viewport[2];
+    height = viewport[3];
+}
+
 void prepareFramebufferCapture() {
     GLint viewport[4] = {0, 0, 0, 0};
     glGetIntegerv(GL_VIEWPORT, viewport);

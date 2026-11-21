@@ -4,6 +4,7 @@
 #include <Geode/modify/FMODAudioEngine.hpp>
 #include "../record/VideoRecorder.hpp"
 #include "../record/FrameCapture.hpp"
+#include "../record/AudioBridge.hpp"
 
 #include <vector>
 #include <algorithm>
@@ -93,9 +94,9 @@ class $modify(RecordPauseLayer, PauseLayer) {
             return;
         }
 
-        auto size = CCDirector::sharedDirector()->getWinSizeInPixels();
-        int sourceWidth = static_cast<int>(size.width);
-        int sourceHeight = static_cast<int>(size.height);
+        int sourceWidth = 0;
+        int sourceHeight = 0;
+        record::getFramebufferSize(sourceWidth, sourceHeight);
         int width = sourceWidth;
         int height = std::max(2, (sourceHeight * width / std::max(1, sourceWidth)) & ~1);
         width &= ~1;
@@ -108,7 +109,7 @@ class $modify(RecordPauseLayer, PauseLayer) {
             FLAlertLayer::create("Record", recorder.error(), "OK")->show();
         } else {
             FLAlertLayer::create("Record",
-                "Recording is initializing at full resolution, up to 60 FPS. Open pause and tap the red icon to stop.",
+                recordaudio_bridge::available() ? "Recording is initializing at full resolution, up to 60 FPS. Game audio is saved to a separate WAV file." : "Recording is initializing at full resolution, up to 60 FPS. Install RecordAudio to capture game audio.",
                 "OK")->show();
         }
     }

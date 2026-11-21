@@ -52,7 +52,7 @@ private:
     std::chrono::steady_clock::time_point m_startTime;
     int m_width = 0;
     int m_height = 0;
-    int m_fps = 30;
+    int m_fps = 60;
     std::atomic_bool m_recording{false};
     std::atomic_bool m_ready{false};
     std::string m_outputPath;
