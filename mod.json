@@ -5,7 +5,7 @@
   },
   "id": "fakeskyline.record",
   "name": "Record",
-  "version": "v0.1.0",
+  "version": "v0.2.0",
   "developer": "fakeskyline",
-  "description": "In-game Geometry Dash gameplay recorder for Android ARM64."
+  "description": "Android Geometry Dash gameplay video recorder."
 }

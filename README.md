@@ -1,32 +1,25 @@
 # Record
 
-An Android ARM64 Geode mod for Geometry Dash. The project targets Geometry Dash 2.2091 and Geode 6.0.0-beta.1.
+Android ARM64 Geode mod targeting Geometry Dash 2.2091 and Geode 6.0.0-beta.1.
 
-## Target platform
+## Current implementation
 
-- Geometry Dash: 2.2091
-- Geode: 6.0.0-beta.1
-- Android ABI: arm64-v8a
-- Android minimum SDK: 23
-- Build system: CMake + Geode SDK
-- CI: GitHub Actions
+- OpenGL framebuffer readback from the Cocos2d director render loop.
+- RGBA to YUV420 semi-planar conversion.
+- Android MediaCodec H.264 encoding.
+- Android MediaMuxer MP4 output.
+- Pause-menu start/stop control.
+- GitHub Actions Android64 build.
 
-## Planned recorder behavior
+Output target:
+`/storage/emulated/0/Android/media/com.geode.launcher/game/renders/Record.mp4`
 
-- Record the Geometry Dash render output only, not the entire device screen.
-- Encode H.264 video and AAC game audio into MP4.
-- Capture music and sound effects from the game's audio engine.
-- Add a compact icon control to the in-game pause menu.
-- Save recordings to:
-  `/storage/emulated/0/Android/media/com.geode.launcher/game/renders/`
-- Detect unsupported encoder resolutions and frame rates instead of silently producing broken files.
+## Known limitations in this development build
 
-## Build
+- Audio capture from FMOD is not implemented yet.
+- Frame readback is synchronous and may affect frame rate.
+- The output path depends on the launcher process having write access.
+- Codec support and output are device-dependent and require on-device validation.
+- The recorder currently captures the rendered framebuffer while active; the pause overlay may be included in frames rendered during pause.
 
-Every push to `main` starts the Android64 GitHub Actions build. Run it manually from the Actions tab with **Build Record (Android64) → Run workflow**.
-
-The resulting `.geode` package is uploaded as the `Record-Android64` artifact.
-
-## Current implementation status
-
-This commit establishes the Geode project, target metadata, and reproducible Android64 CI build. It is **not yet a functional recorder**: the gameplay frame capture, audio tap, H.264/AAC encoding, MP4 muxing, and pause-menu controls still need implementation and on-device validation. No recording controls are exposed until the pipeline can create a valid file.
+Do not treat this development build as final until the Android64 workflow succeeds and the MP4 is tested on the target device.
