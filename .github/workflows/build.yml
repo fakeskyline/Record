@@ -26,6 +26,8 @@ jobs:
           sdk: given
           target: Android64
           android-min-sdk: 23
+      - name: Preserve Record artifact directory
+        run: mv output output-record
       - name: Build RecordAudio
         id: build-audio
         uses: geode-sdk/build-geode-mod@main
@@ -39,7 +41,7 @@ jobs:
         with:
           name: Record-and-RecordAudio-Android64
           path: |
-            ${{ steps.build-record.outputs.build-output }}/*.geode
-            ${{ steps.build-audio.outputs.build-output }}/*.geode
+            output-record/*.geode
+            output/*.geode
           if-no-files-found: error
           retention-days: 14

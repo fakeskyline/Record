@@ -105,11 +105,13 @@ class $modify(RecordPauseLayer, PauseLayer) {
             "/storage/emulated/0/Android/media/com.geode.launcher/game/renders/Record.mp4";
 
         record::prepareFramebufferCapture();
+        bool audioAvailable = recordaudio_bridge::start(path);
         if (!recorder.start(path, width, height, 60)) {
+            recordaudio_bridge::stop();
             FLAlertLayer::create("Record", recorder.error(), "OK")->show();
         } else {
             FLAlertLayer::create("Record",
-                recordaudio_bridge::available() ? "Recording is initializing at full resolution, up to 60 FPS. Game audio is saved to a separate WAV file." : "Recording is initializing at full resolution, up to 60 FPS. Install RecordAudio to capture game audio.",
+                audioAvailable ? "Recording is initializing at full resolution, up to 60 FPS. Game audio is saved to a separate WAV file." : "Recording is initializing at full resolution, up to 60 FPS. Install RecordAudio to capture game audio.",
                 "OK")->show();
         }
     }
