@@ -1,0 +1,11 @@
+{
+  "geode": "v6.0.0-beta.1",
+  "gd": {
+    "android": "2.2091"
+  },
+  "id": "fakeskyline.record",
+  "name": "Record",
+  "version": "v0.1.0",
+  "developer": "fakeskyline",
+  "description": "In-game Geometry Dash gameplay recorder for Android ARM64."
+}

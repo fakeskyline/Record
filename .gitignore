@@ -1,0 +1,7 @@
+/build/
+/build-*/
+/cmake-build-*/
+/.gradle/
+/.idea/
+*.geode
+*.so
