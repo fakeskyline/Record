@@ -19,6 +19,7 @@ jobs:
         with:
           repository: fakeskyline/RecordAudio
           path: RecordAudio
+          ccache-variant: ""
       - name: Build Record
         id: build-record
         uses: geode-sdk/build-geode-mod@main
