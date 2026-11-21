@@ -3,5 +3,6 @@
 #include <vector>
 
 namespace record {
+void prepareFramebufferCapture();
 void captureCurrentFramebuffer();
 }
