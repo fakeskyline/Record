@@ -5,6 +5,7 @@
 #include <media/NdkMediaFormat.h>
 #include <media/NdkMediaMuxer.h>
 #include <sys/stat.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <algorithm>
 #include <cerrno>
@@ -21,6 +22,7 @@ struct VideoRecorder::State {
     int track = -1;
     bool muxerStarted = false;
     bool inputEos = false;
+    int outputFd = -1;
 };
 
 static bool makeDirectories(std::string const& path) {
@@ -95,7 +97,14 @@ bool VideoRecorder::start(std::string const& path, int width, int height, int fp
         return false;
     }
 
-    m_state->muxer = AMediaMuxer_new(path.c_str(), AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
+    m_state->outputFd = open(path.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
+    if (m_state->outputFd < 0) {
+        m_error = "Could not open MP4 output file: " + path;
+        closeEncoder();
+        return false;
+    }
+
+    m_state->muxer = AMediaMuxer_new(m_state->outputFd, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
     if (!m_state->muxer) {
         m_error = "Could not create MP4 output file";
         closeEncoder();
@@ -226,6 +235,8 @@ void VideoRecorder::closeEncoder() {
             AMediaMuxer_stop(m_state->muxer);
         AMediaMuxer_delete(m_state->muxer);
     }
+    if (m_state->outputFd >= 0)
+        ::close(m_state->outputFd);
     delete m_state;
     m_state = nullptr;
 }
