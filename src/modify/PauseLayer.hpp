@@ -96,7 +96,7 @@ class $modify(RecordPauseLayer, PauseLayer) {
         auto size = CCDirector::sharedDirector()->getWinSizeInPixels();
         int sourceWidth = static_cast<int>(size.width);
         int sourceHeight = static_cast<int>(size.height);
-        int width = std::min(sourceWidth, 1280);
+        int width = sourceWidth;
         int height = std::max(2, (sourceHeight * width / std::max(1, sourceWidth)) & ~1);
         width &= ~1;
 
@@ -104,11 +104,11 @@ class $modify(RecordPauseLayer, PauseLayer) {
             "/storage/emulated/0/Android/media/com.geode.launcher/game/renders/Record.mp4";
 
         record::prepareFramebufferCapture();
-        if (!recorder.start(path, width, height, 30)) {
+        if (!recorder.start(path, width, height, 60)) {
             FLAlertLayer::create("Record", recorder.error(), "OK")->show();
         } else {
             FLAlertLayer::create("Record",
-                "Recording started at up to 30 FPS. Open pause and tap the red icon to stop.",
+                "Recording is initializing at full resolution, up to 60 FPS. Open pause and tap the red icon to stop.",
                 "OK")->show();
         }
     }

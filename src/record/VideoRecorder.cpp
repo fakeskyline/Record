@@ -46,10 +46,14 @@ VideoRecorder::~VideoRecorder() {
 }
 
 bool VideoRecorder::start(std::string const& path, int width, int height, int fps) {
-    if (m_recording) {
+    if (m_recording.load()) {
         m_error = "Recording is already active";
         return false;
     }
+
+    if (m_worker.joinable())
+        m_worker.join();
+    closeEncoder();
 
     m_error.clear();
     width &= ~1;
@@ -59,31 +63,60 @@ bool VideoRecorder::start(std::string const& path, int width, int height, int fp
         return false;
     }
 
+    m_width = width;
+    m_height = height;
+    m_fps = fps;
+    m_outputPath = path;
+    m_yuv.clear();
+
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_frames.clear();
+        m_stopping = false;
+    }
+
+    m_startTime = std::chrono::steady_clock::now();
+    m_ready.store(false);
+    m_recording.store(true);
+    try {
+        m_worker = std::thread(&VideoRecorder::workerLoop, this);
+    } catch (...) {
+        m_recording.store(false);
+        m_error = "Could not start recorder worker thread";
+        return false;
+    }
+
+    REC_LOGI("Video recording requested: %dx%d @ %d", width, height, fps);
+    return true;
+}
+
+bool VideoRecorder::initializeEncoder(std::string const& path) {
     if (!makeDirectories(path)) {
         m_error = "Cannot create output directory: " + path;
         return false;
     }
 
     m_state = new State();
-    m_width = width;
-    m_height = height;
-    m_fps = fps;
-    m_yuv.resize(static_cast<size_t>(width) * height * 3 / 2);
+    m_yuv.resize(static_cast<size_t>(m_width) * m_height * 3 / 2);
 
     auto* format = AMediaFormat_new();
+    if (!format) {
+        m_error = "Could not allocate encoder format";
+        return false;
+    }
     AMediaFormat_setString(format, AMEDIAFORMAT_KEY_MIME, "video/avc");
-    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_WIDTH, width);
-    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_HEIGHT, height);
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_WIDTH, m_width);
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_HEIGHT, m_height);
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_COLOR_FORMAT, 21);
-    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_BIT_RATE, std::min(width * height * fps, 24000000));
-    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_FRAME_RATE, fps);
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_BIT_RATE,
+        std::min(m_width * m_height * m_fps, 60000000));
+    AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_FRAME_RATE, m_fps);
     AMediaFormat_setInt32(format, AMEDIAFORMAT_KEY_I_FRAME_INTERVAL, 2);
 
     m_state->codec = AMediaCodec_createEncoderByType("video/avc");
     if (!m_state->codec) {
         AMediaFormat_delete(format);
         m_error = "H.264 encoder is unavailable on this device";
-        closeEncoder();
         return false;
     }
 
@@ -93,33 +126,22 @@ bool VideoRecorder::start(std::string const& path, int width, int height, int fp
     AMediaFormat_delete(format);
     if (status != AMEDIA_OK || AMediaCodec_start(m_state->codec) != AMEDIA_OK) {
         m_error = "Could not configure the H.264 encoder";
-        closeEncoder();
         return false;
     }
 
     m_state->outputFd = open(path.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0664);
     if (m_state->outputFd < 0) {
         m_error = "Could not open MP4 output file: " + path;
-        closeEncoder();
         return false;
     }
 
     m_state->muxer = AMediaMuxer_new(m_state->outputFd, AMEDIAMUXER_OUTPUT_FORMAT_MPEG_4);
     if (!m_state->muxer) {
         m_error = "Could not create MP4 output file";
-        closeEncoder();
         return false;
     }
 
-    {
-        std::lock_guard<std::mutex> lock(m_queueMutex);
-        m_frames.clear();
-        m_stopping = false;
-    }
-    m_startTime = std::chrono::steady_clock::now();
-    m_recording.store(true);
-    m_worker = std::thread(&VideoRecorder::workerLoop, this);
-    REC_LOGI("Video recording started: %dx%d @ %d", width, height, fps);
+    REC_LOGI("H.264 encoder initialized: %dx%d @ %d", m_width, m_height, m_fps);
     return true;
 }
 
@@ -149,7 +171,7 @@ void VideoRecorder::convertRGBA(uint8_t const* rgba, int sourceWidth, int source
 }
 
 void VideoRecorder::pushRGBA(uint8_t const* rgba, int width, int height) {
-    if (!m_recording.load() || !rgba || width < 2 || height < 2)
+    if (!m_recording.load() || !m_ready.load() || !rgba || width < 2 || height < 2)
         return;
 
     Frame frame;
@@ -193,6 +215,15 @@ void VideoRecorder::encodeFrame(Frame const& frame) {
 }
 
 void VideoRecorder::workerLoop() {
+    if (!initializeEncoder(m_outputPath)) {
+        m_recording.store(false);
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_stopping = true;
+        m_frames.clear();
+        return;
+    }
+
+    m_ready.store(true);
     for (;;) {
         Frame frame;
         {
@@ -208,6 +239,7 @@ void VideoRecorder::workerLoop() {
         encodeFrame(frame);
     }
     drain(true);
+    m_ready.store(false);
 }
 
 void VideoRecorder::drain(bool endOfStream) {
@@ -265,6 +297,7 @@ void VideoRecorder::stop() {
     }
 
     m_recording.store(false);
+    m_ready.store(false);
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
         m_stopping = true;

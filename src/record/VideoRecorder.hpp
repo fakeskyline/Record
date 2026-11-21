@@ -14,7 +14,7 @@ namespace record {
 class VideoRecorder {
 public:
     static VideoRecorder& get();
-    bool start(std::string const& path, int width, int height, int fps = 30);
+    bool start(std::string const& path, int width, int height, int fps = 60);
     void pushRGBA(uint8_t const* rgba, int width, int height);
     void stop();
     bool isRecording() const;
@@ -34,6 +34,7 @@ private:
         int64_t ptsUs = 0;
     };
 
+    bool initializeEncoder(std::string const& path);
     void closeEncoder();
     void drain(bool endOfStream);
     void convertRGBA(uint8_t const* rgba, int sourceWidth, int sourceHeight);
@@ -52,6 +53,8 @@ private:
     int m_height = 0;
     int m_fps = 30;
     std::atomic_bool m_recording{false};
+    std::atomic_bool m_ready{false};
+    std::string m_outputPath;
     bool m_stopping = false;
 };
 }
