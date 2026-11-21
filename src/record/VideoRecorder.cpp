@@ -10,7 +10,8 @@
 #include <algorithm>
 #include <cerrno>
 #include <cstring>
-#include <memory>
+#include <chrono>
+#include <utility>
 
 #define REC_LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "Record", __VA_ARGS__)
 #define REC_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "Record", __VA_ARGS__)
@@ -67,7 +68,6 @@ bool VideoRecorder::start(std::string const& path, int width, int height, int fp
     m_width = width;
     m_height = height;
     m_fps = fps;
-    m_frameIndex = 0;
     m_yuv.resize(static_cast<size_t>(width) * height * 3 / 2);
 
     auto* format = AMediaFormat_new();
@@ -111,7 +111,14 @@ bool VideoRecorder::start(std::string const& path, int width, int height, int fp
         return false;
     }
 
-    m_recording = true;
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_frames.clear();
+        m_stopping = false;
+    }
+    m_startTime = std::chrono::steady_clock::now();
+    m_recording.store(true);
+    m_worker = std::thread(&VideoRecorder::workerLoop, this);
     REC_LOGI("Video recording started: %dx%d @ %d", width, height, fps);
     return true;
 }
@@ -142,25 +149,65 @@ void VideoRecorder::convertRGBA(uint8_t const* rgba, int sourceWidth, int source
 }
 
 void VideoRecorder::pushRGBA(uint8_t const* rgba, int width, int height) {
-    if (!m_recording || !rgba || width <= 0 || height <= 0 || !m_state)
+    if (!m_recording.load() || !rgba || width < 2 || height < 2)
         return;
 
-    convertRGBA(rgba, width, height);
-    ssize_t inputIndex = AMediaCodec_dequeueInputBuffer(m_state->codec, 0);
-    if (inputIndex >= 0) {
-        size_t capacity = 0;
-        uint8_t* input = AMediaCodec_getInputBuffer(m_state->codec, inputIndex, &capacity);
-        if (input && capacity >= m_yuv.size()) {
-            std::memcpy(input, m_yuv.data(), m_yuv.size());
-            auto pts = (m_frameIndex * 1000000LL) / m_fps;
-            AMediaCodec_queueInputBuffer(m_state->codec, inputIndex, 0, m_yuv.size(), pts, 0);
-            ++m_frameIndex;
-        } else {
-            AMediaCodec_queueInputBuffer(m_state->codec, inputIndex, 0, 0, 0, 0);
-            m_error = "Encoder input buffer is too small";
-        }
+    Frame frame;
+    frame.width = width;
+    frame.height = height;
+    frame.ptsUs = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now() - m_startTime).count();
+    frame.pixels.assign(rgba, rgba + static_cast<size_t>(width) * height * 4);
+
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        if (m_stopping || m_frames.size() >= 2)
+            return;
+        m_frames.emplace_back(std::move(frame));
     }
+    m_queueCondition.notify_one();
+}
+
+void VideoRecorder::encodeFrame(Frame const& frame) {
+    if (!m_state || !m_state->codec)
+        return;
+
+    convertRGBA(frame.pixels.data(), frame.width, frame.height);
+    ssize_t inputIndex = AMediaCodec_dequeueInputBuffer(m_state->codec, 10000);
+    if (inputIndex < 0) {
+        m_error = "H.264 encoder did not provide an input buffer";
+        return;
+    }
+
+    size_t capacity = 0;
+    uint8_t* input = AMediaCodec_getInputBuffer(m_state->codec, inputIndex, &capacity);
+    if (!input || capacity < m_yuv.size()) {
+        AMediaCodec_queueInputBuffer(m_state->codec, inputIndex, 0, 0, frame.ptsUs, 0);
+        m_error = "Encoder input buffer is too small";
+        return;
+    }
+
+    std::memcpy(input, m_yuv.data(), m_yuv.size());
+    AMediaCodec_queueInputBuffer(m_state->codec, inputIndex, 0, m_yuv.size(), frame.ptsUs, 0);
     drain(false);
+}
+
+void VideoRecorder::workerLoop() {
+    for (;;) {
+        Frame frame;
+        {
+            std::unique_lock<std::mutex> lock(m_queueMutex);
+            m_queueCondition.wait(lock, [this] {
+                return m_stopping || !m_frames.empty();
+            });
+            if (m_frames.empty() && m_stopping)
+                break;
+            frame = std::move(m_frames.front());
+            m_frames.pop_front();
+        }
+        encodeFrame(frame);
+    }
+    drain(true);
 }
 
 void VideoRecorder::drain(bool endOfStream) {
@@ -171,7 +218,8 @@ void VideoRecorder::drain(bool endOfStream) {
         auto index = AMediaCodec_dequeueInputBuffer(m_state->codec, 10000);
         if (index >= 0) {
             AMediaCodec_queueInputBuffer(m_state->codec, index, 0, 0,
-                (m_frameIndex * 1000000LL) / std::max(1, m_fps),
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - m_startTime).count(),
                 AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
             m_state->inputEos = true;
         }
@@ -212,12 +260,20 @@ void VideoRecorder::drain(bool endOfStream) {
 
 void VideoRecorder::stop() {
     if (!m_state) {
-        m_recording = false;
+        m_recording.store(false);
         return;
     }
-    drain(true);
+
+    m_recording.store(false);
+    {
+        std::lock_guard<std::mutex> lock(m_queueMutex);
+        m_stopping = true;
+    }
+    m_queueCondition.notify_all();
+    if (m_worker.joinable())
+        m_worker.join();
+
     closeEncoder();
-    m_recording = false;
     m_yuv.clear();
     if (m_error.empty())
         REC_LOGI("Video recording stopped");
@@ -242,7 +298,7 @@ void VideoRecorder::closeEncoder() {
 }
 
 bool VideoRecorder::isRecording() const {
-    return m_recording;
+    return m_recording.load();
 }
 
 std::string const& VideoRecorder::error() const {
