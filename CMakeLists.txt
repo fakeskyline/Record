@@ -20,7 +20,7 @@ if(ANDROID)
     find_library(ANDROID_LIB android)
     find_library(LOG_LIB log)
     find_library(GLES_LIB GLESv2)
-    target_link_libraries(${PROJECT_NAME} PRIVATE
+    target_link_libraries(${PROJECT_NAME}
         ${MEDIA_NDK_LIB}
         ${ANDROID_LIB}
         ${LOG_LIB}
