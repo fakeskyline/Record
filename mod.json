@@ -1,10 +1,17 @@
 {
- "geode":"6.0.0-beta.1",
- "gd":{"android":"2.2091"},
- "id":"fakeskyline.record",
- "name":"Record",
- "version":"v0.3.0",
- "developer":"fakeskyline",
- "description":"Android Geometry Dash gameplay recorder with optional RecordAudio companion.",
- "dependencies":[{"id":"fakeskyline.recordaudio","version":">=0.1.0","importance":"recommended"}]
+  "geode": "6.0.0-beta.1",
+  "gd": {
+    "android": "2.2091"
+  },
+  "id": "fakeskyline.record",
+  "name": "Record",
+  "version": "v0.3.0",
+  "developer": "fakeskyline",
+  "description": "Android Geometry Dash gameplay recorder with optional RecordAudio companion.",
+  "dependencies": {
+    "fakeskyline.recordaudio": {
+      "version": ">=0.1.0",
+      "importance": "recommended"
+    }
+  }
 }

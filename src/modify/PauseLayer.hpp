@@ -38,7 +38,13 @@ class $modify(RecordPauseLayer, PauseLayer) {
         menu->setID("record-control-menu"_spr);
         menu->setPosition({0.f, 0.f});
 
-        auto icon = CCLayerColor::create(ccc4(230, 48, 55, 255), 30.f, 30.f);
+        auto iconPath = Mod::get()->getResourcesDir() / "record-camera-gd.png";
+        auto icon = CCSprite::create(iconPath.string().c_str());
+        if (!icon) {
+            log::error("Could not load Record button texture: {}", iconPath.string());
+            return;
+        }
+        icon->setScale(0.72f);
         auto button = CCMenuItemSpriteExtra::create(
             icon, this, menu_selector(RecordPauseLayer::onRecordToggle)
         );
