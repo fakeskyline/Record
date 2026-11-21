@@ -291,13 +291,12 @@ void VideoRecorder::drain(bool endOfStream) {
 }
 
 void VideoRecorder::stop() {
-    if (!m_state) {
-        m_recording.store(false);
-        return;
-    }
-
     m_recording.store(false);
     m_ready.store(false);
+
+    if (!m_worker.joinable() && !m_state)
+        return;
+
     {
         std::lock_guard<std::mutex> lock(m_queueMutex);
         m_stopping = true;
@@ -332,6 +331,10 @@ void VideoRecorder::closeEncoder() {
 
 bool VideoRecorder::isRecording() const {
     return m_recording.load();
+}
+
+bool VideoRecorder::isReady() const {
+    return m_ready.load();
 }
 
 std::string const& VideoRecorder::error() const {

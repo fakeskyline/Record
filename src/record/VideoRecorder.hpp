@@ -18,6 +18,7 @@ public:
     void pushRGBA(uint8_t const* rgba, int width, int height);
     void stop();
     bool isRecording() const;
+    bool isReady() const;
     std::string const& error() const;
 
 private:

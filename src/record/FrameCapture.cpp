@@ -11,7 +11,6 @@ static std::vector<uint8_t> s_pixels;
 static std::chrono::steady_clock::time_point s_lastCapture{};
 
 void prepareFramebufferCapture() {
-    auto size = cocos2d::CCDirector::sharedDirector()->getWinSizeInPixels();
     GLint viewport[4] = {0, 0, 0, 0};
     glGetIntegerv(GL_VIEWPORT, viewport);
     int width = viewport[2];
@@ -24,7 +23,7 @@ void prepareFramebufferCapture() {
 
 void captureCurrentFramebuffer() {
     auto& recorder = VideoRecorder::get();
-    if (!recorder.isRecording()) return;
+    if (!recorder.isReady()) return;
 
     auto now = std::chrono::steady_clock::now();
     if (s_lastCapture.time_since_epoch().count() != 0 &&
