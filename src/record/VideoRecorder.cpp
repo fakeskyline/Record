@@ -128,7 +128,7 @@ void VideoRecorder::convertRGBA(uint8_t const* rgba, int sourceWidth, int source
     auto* uvPlane = yPlane + static_cast<size_t>(m_width) * m_height;
     for (int y = 0; y < m_height; ++y) {
         int sy = (y * sourceHeight) / m_height;
-        int row = (m_height - 1 - y) * sourceWidth * 4;
+        int row = (sourceHeight - 1 - sy) * sourceWidth * 4;
         for (int x = 0; x < m_width; ++x) {
             int sx = (x * sourceWidth) / m_width;
             auto p = rgba + row + sx * 4;
