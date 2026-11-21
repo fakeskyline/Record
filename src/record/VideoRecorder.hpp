@@ -14,7 +14,7 @@ namespace record {
 class VideoRecorder {
 public:
     static VideoRecorder& get();
-    bool start(std::string const& path, int width, int height, int fps = 60);
+    bool start(std::string const& path, int width, int height, int fps = 30);
     void pushRGBA(uint8_t const* rgba, int width, int height);
     void stop();
     bool isRecording() const;
@@ -50,7 +50,7 @@ private:
     std::chrono::steady_clock::time_point m_startTime;
     int m_width = 0;
     int m_height = 0;
-    int m_fps = 60;
+    int m_fps = 30;
     std::atomic_bool m_recording{false};
     bool m_stopping = false;
 };
