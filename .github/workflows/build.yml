@@ -28,6 +28,8 @@ jobs:
           android-min-sdk: 23
       - name: Preserve Record artifact directory
         run: mv output output-record
+      - name: Clean shared Ninja directory
+        run: rm -rf "$GITHUB_WORKSPACE/ninja"
       - name: Build RecordAudio
         id: build-audio
         uses: geode-sdk/build-geode-mod@main
